@@ -76,14 +76,70 @@ except CD14+ monocytes; bulk = per-donor pseudobulk of those cells (8 donors x 2
 The bulk carries the right biology (r = 0.92 against the real single-cell effect); the problem is its format.
 Anchored mode keeps the biology while matching single-cell depth, sparsity and cell-to-cell structure.
 
-### 2. STACK with bulk prompts (`examples/bulk/benchmark_kang.py`)
+### 2. STACK with bulk prompts, four held-out cell types
 
-`examples/bulk/benchmark_kang.py`. Held-out CD14+ monocytes: 1,500 untreated query cells, with 2,765 treated
-cells as the answer key (never shown to STACK). 9,492 genes scored. Pretrained Stack-Large-Aligned, default
-generation settings, seed 0, CPU. Effects are mean log-normalized expression, treated minus untreated; STACK's
-effect is its treated prediction minus its own untreated prediction.
+`examples/bulk/benchmark_kang.py`, combined with `examples/bulk/summarize_holdouts.py`. Each run holds out one
+cell type. Its untreated cells are the query, its treated cells are the answer key (never shown to STACK), and all
+other cell types form the reference context. The bulk reference is the per-donor pseudobulk of that context:
+16 samples with a median of 1.6 to 2.2 million counts each, against about 1,200 counts per cell. Held-out cell types:
+CD14+ monocytes (1,500 query cells, 2,765 answer-key cells), B cells (1,316 and 1,335), NK cells (855 and 861) and
+FCGR3A+ monocytes (520 and 569). 9,492 genes scored in every run.
 
-![STACK with single-cell vs bulk prompts](figures/bulk_vs_sc_kang_cd14mono.png)
+Pretrained Stack-Large-Aligned, default generation settings, seed 0, CPU. Effects are mean log-normalized
+expression, treated minus untreated. STACK's effect is its treated prediction minus its own untreated prediction.
+"Copy the bulk effect" uses the log-normalized pseudobulk difference (treated mean minus control mean) directly as
+the prediction, with no model.
+
+![STACK with single-cell vs bulk prompts across four held-out cell types](figures/bulk_vs_sc_kang_holdouts.png)
+
+Correlation with the real response, all genes, per held-out cell type:
+
+| Prompt given to STACK | CD14+ monocytes | B cells | NK cells | FCGR3A+ monocytes | Mean |
+|---|---|---|---|---|---|
+| Single cells (reference) | 0.82 | 0.80 | 0.80 | 0.80 | 0.81 |
+| BulkExpand anchored | 0.80 | 0.78 | 0.79 | 0.80 | 0.79 |
+| BulkExpand homogeneous | 0.78 | 0.71 | 0.65 | 0.74 | 0.72 |
+| Bulk rescaled to cell depth | 0.76 | 0.74 | 0.60 | 0.64 | 0.68 |
+| Raw bulk (no adapter) | 0.67 | 0.70 | 0.57 | 0.53 | 0.62 |
+| Copy the bulk effect (no model) | 0.86 | 0.75 | 0.72 | 0.90 | 0.81 |
+
+Means over the four held-out cell types:
+
+| Prompt given to STACK | r, all genes | r, top-200 genes | Direction correct, top 200 | Error, top 200 |
+|---|---|---|---|---|
+| Single cells (reference) | 0.81 | 0.88 | 90.3% | 0.40 |
+| BulkExpand anchored | 0.79 | 0.87 | 90.2% | 0.45 |
+| BulkExpand homogeneous | 0.72 | 0.82 | 90.5% | 0.50 |
+| Bulk rescaled to cell depth | 0.68 | 0.79 | 86.9% | 0.54 |
+| Raw bulk (no adapter) | 0.62 | 0.75 | 86.5% | 0.57 |
+| Copy the bulk effect (no model) | 0.81 | 0.88 | 97.6% | 0.34 |
+| Predict no change (no model) | n/a | n/a | n/a | 0.82 |
+
+How to read it:
+
+- Raw bulk hurts STACK in every held-out cell type. Mean all-gene correlation falls from 0.81 to 0.62 (a drop of
+  0.10 to 0.28 depending on the cell type) and error rises from 0.40 to 0.57.
+- BulkExpand anchored stays within about 0.02 of the single-cell prompt on all-gene correlation in every cell type
+  (mean 0.79). On average it recovers 94% of what raw bulk loses (81% to 99% per cell type). It matches single
+  cells on up/down direction (90% for both). Error recovers about 70% of the gap (0.45).
+- The atlas matters. Anchored beats homogeneous on all-gene correlation in all four cell types (by 0.02 to 0.14).
+  Homogeneous (0.72) still beats rescaling alone (0.68) and raw bulk (0.62) on average.
+- Copying the bulk effect with no model ties STACK on correlation overall (0.81 for both copying and STACK with
+  single-cell prompts), but it depends on the cell type. Copying is ahead for both monocyte types (0.86 and 0.90).
+  It is behind for B cells and NK cells (0.75 and 0.72, against 0.80 for STACK with single-cell prompts and 0.78
+  to 0.79 with BulkExpand anchored). Copying is still better on up/down direction in all four cell types (98%
+  against 90% on average) and on mean error (0.34 against 0.40).
+- So this benchmark shows that STACK can *read* bulk through BulkExpand almost as well as it reads single cells.
+  It does not show that STACK beats a simple baseline: the interferon response is largely shared across blood cell
+  types, so the reference effect already transfers well. A task where cell types respond differently is the real
+  test. On sci-Plex A549 to MCF7 transfer, copying beat baseline STACK.
+- Caveats: one seed per run, one dataset, and pseudobulk rather than real bulk.
+
+Raw numbers for all four runs: [`results/bulk_benchmark_kang_all_runs.csv`](results/bulk_benchmark_kang_all_runs.csv).
+
+#### One run in detail: held-out CD14+ monocytes
+
+![STACK with single-cell vs bulk prompts, held-out CD14+ monocytes](figures/bulk_vs_sc_kang_cd14mono.png)
 
 | Prompt given to STACK | r, all genes | r, top-200 genes | Direction correct, top 200 | Error, top 200 |
 |---|---|---|---|---|
@@ -94,18 +150,6 @@ effect is its treated prediction minus its own untreated prediction.
 | Raw bulk (no adapter) | 0.67 | 0.79 | 92.5% | 0.76 |
 | Copy the bulk effect (no model) | 0.86 | 0.90 | 99.5% | 0.49 |
 | Predict no change (no model) | n/a | n/a | n/a | 1.10 |
-
-How to read it:
-
-- Raw bulk measurably hurts STACK: all-gene correlation drops from 0.82 to 0.67 and error rises from 0.57 to 0.76.
-- BulkExpand anchored recovers 86% of the correlation gap (0.80) and matches real single cells on up/down
-  direction (94%). Error recovers only partly (0.69).
-- Differences among the adapter variants on the top-200 genes are about 0.02, which one run cannot resolve.
-  Re-running `benchmark_kang.py --holdout` on other cell types (B cells, NK cells, FCGR3A+ monocytes) is the replication.
-- Copying the bulk effect with no model beats every STACK prompt, including real single cells. The interferon
-  response is largely shared across blood cell types, so the reference effect already transfers well. This
-  benchmark therefore tests whether STACK can *read* bulk. Whether STACK adds value beyond the reference needs a
-  task where cell types respond differently; on sci-Plex A549 to MCF7 transfer, copying also beat baseline STACK.
 
 Raw numbers: [`results/bulk_benchmark_kang_cd14mono.csv`](results/bulk_benchmark_kang_cd14mono.csv).
 
@@ -118,6 +162,7 @@ Raw numbers: [`results/bulk_benchmark_kang_cd14mono.csv`](results/bulk_benchmark
 - The paper notes that prompts built by arithmetic on expression can look unrealistic. Resampling makes the
   count statistics realistic, but the shift itself is still a global multiplicative change.
 - Tested on pseudobulk so far, which isolates the format problem. Real bulk adds batch and platform effects.
+- One dataset (Kang) and one seed per run. Four held-out cell types agree, but all share one experiment.
 
 ## Next steps
 
