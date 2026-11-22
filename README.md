@@ -1,3 +1,7 @@
+> **Fork note (PUBS x Engram, branch `sohum/bulk-expand`):** this fork adds `stack.bulk` (BulkExpand), an add-on that
+> turns bulk RNA-seq reference perturbations into synthetic single-cell prompts STACK can use, plus the
+> `stack-bulk-prompt` CLI, tests and a benchmark. See [docs/bulk_expansion.md](docs/bulk_expansion.md).
+
 
 # Stack: In-context learning of single-cell biology
 

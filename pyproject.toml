@@ -37,6 +37,7 @@ stack-train = "stack.cli.launch_training:main"
 stack-finetune = "stack.cli.launch_finetuning:main"
 stack-embedding = "stack.cli.embedding:main"
 stack-generation = "stack.cli.generation:main"
+stack-bulk-prompt = "stack.bulk.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
